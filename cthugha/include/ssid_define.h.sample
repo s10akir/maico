@@ -1,0 +1,7 @@
+#ifndef _SSID_DEFINE_H_
+#define _SSID_DEFINE_H_
+
+const char* MY_SSID = "";
+const char* MY_SSID_PASS = "";
+
+#endif
