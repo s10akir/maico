@@ -1,11 +1,16 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <ESPAsyncWebServer.h>
+#include <DHTesp.h>
 #include <nvs_flash.h>
 #include <ssid_define.h>
 #include <ip_define.h>
 
 AsyncWebServer server(80);
+
+DHTesp dht;
+const int DHT_PIN = 32;
+const DHTesp::DHT_MODEL_t DHT_TYPE = DHTesp::AM2302;
 
 boolean connectWiFi() {
   Serial.print("WiFi Connecting");
@@ -44,6 +49,8 @@ boolean connectWiFi() {
 void setup() {
   Serial.begin(115200);
 
+  dht.setup(DHT_PIN, DHT_TYPE); 
+
   WiFi.config(ip, gateway, subnet);
 
   /* create WiFi Connection*/
@@ -65,11 +72,18 @@ void setup() {
   DefaultHeaders::Instance().addHeader("Access-Control-Allow-Headers", "*");
 
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
-    request->send(200, "application/json", "{\"message\": \"Hello, World!\"}");
+    /* fetch temp and humi from DHT22 */
+    // NOTE: 2秒程度待機しないとNaNになる可能性あり
+    TempAndHumidity values = dht.getTempAndHumidity();
+    float t = values.temperature;
+    float h = values.humidity;
+
+    request->send(200, "application/json", "{\"data\": {\"temperature\": " + String(t) + ", \"humidity\": " + String(h) + "}}");
   });
 
   server.begin();
 }
 
 void loop() {
+  // TODO: WiFiが切断された場合にリセットする
 }
