@@ -1,8 +1,11 @@
 #include <Arduino.h>
 #include <WiFi.h>
+#include <ESPAsyncWebServer.h>
 #include <nvs_flash.h>
 #include <ssid_define.h>
 #include <ip_define.h>
+
+AsyncWebServer server(80);
 
 boolean connectWiFi() {
   Serial.print("WiFi Connecting");
@@ -57,6 +60,15 @@ void setup() {
     count++;
     delay(15000);
   }
+
+  DefaultHeaders::Instance().addHeader("Access-Control-Allow-Origin", "*");
+  DefaultHeaders::Instance().addHeader("Access-Control-Allow-Headers", "*");
+
+  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
+    request->send(200, "application/json", "{\"message\": \"Hello, World!\"}");
+  });
+
+  server.begin();
 }
 
 void loop() {
