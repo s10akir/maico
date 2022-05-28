@@ -1,8 +1,8 @@
 # cthugha
 
-## description
-
 ESP32にDHT22を載せた温湿度センサ
+
+## description
 
 * HiLetgo ESP32 ESP-32 NodeMCU
 * `/` へのGETで現在の温度と湿度をJSONで返すWebAPIを提供する
