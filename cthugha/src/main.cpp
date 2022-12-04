@@ -1,12 +1,16 @@
 #include <Arduino.h>
 #include <WiFi.h>
-#include <ESPAsyncWebServer.h>
 #include <DHTesp.h>
 #include <nvs_flash.h>
+#include <InfluxDbClient.h>
+#include <InfluxDbCloud.h>
 #include <ssid_define.h>
 #include <ip_define.h>
+#include <influxdb_define.h>
 
-AsyncWebServer server(80);
+InfluxDBClient client(INFLUXDB_URL, INFLUXDB_ORG, INFLUXDB_BUCKET, INFLUXDB_TOKEN, InfluxDbCloud2CACert);
+Point temperaturePoint("temperature");
+Point humidityPoint("humidity");
 
 DHTesp dht;
 const int DHT_PIN = 32;
@@ -42,6 +46,8 @@ boolean connectWiFi() {
   Serial.println(WiFi.gatewayIP());
   Serial.print("Subnet: ");
   Serial.println(WiFi.subnetMask());
+  Serial.print("DNS: ");
+  Serial.println(WiFi.dnsIP());
 
   return true;
 }
@@ -51,7 +57,7 @@ void setup() {
 
   dht.setup(DHT_PIN, DHT_TYPE); 
 
-  WiFi.config(ip, gateway, subnet);
+  WiFi.config(ip, gateway, subnet, dns);
 
   /* create WiFi Connection*/
   int count = 1;
@@ -68,22 +74,43 @@ void setup() {
     delay(15000);
   }
 
-  DefaultHeaders::Instance().addHeader("Access-Control-Allow-Origin", "*");
-  DefaultHeaders::Instance().addHeader("Access-Control-Allow-Headers", "*");
+  temperaturePoint.addTag("device", "cthugha");
+  humidityPoint.addTag("device", "cthugha");
+  timeSync(TZ_INFO, "ntp.nict.jp");
 
-  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
-    /* fetch temp and humi from DHT22 */
-    // NOTE: 2秒程度待機しないとNaNになる可能性あり
-    TempAndHumidity values = dht.getTempAndHumidity();
-    float t = values.temperature;
-    float h = values.humidity;
-
-    request->send(200, "application/json", "{\"data\": {\"temperature\": " + String(t) + ", \"humidity\": " + String(h) + "}}");
-  });
-
-  server.begin();
+  if (client.validateConnection()) {
+    Serial.print("Connected to influxDB: ");
+    Serial.println(client.getServerUrl());
+  } else {
+    Serial.print("InfluxDB connection failed: ");
+    Serial.println(client.getLastErrorMessage());
+  }
 }
 
 void loop() {
+  temperaturePoint.clearFields();
+  humidityPoint.clearFields();
+
+  /* fetch temp and humi from DHT22 */
+  // NOTE: 2秒程度待機しないとNaNになる可能性あり
+  temperaturePoint.addField("value", dht.getTemperature());
+  humidityPoint.addField("value", dht.getHumidity());
+
+  Serial.println(client.pointToLineProtocol(temperaturePoint));
+  Serial.println(client.pointToLineProtocol(humidityPoint));
+
+  if (!client.writePoint(temperaturePoint)) {
+    Serial.print("InfluxDB write failed: ");
+    Serial.println(client.getLastErrorMessage());
+  }
+
+  if (!client.writePoint(humidityPoint)) {
+    Serial.print("InfluxDB write failed: ");
+    Serial.println(client.getLastErrorMessage());
+  }
+
+  Serial.println("Waiting 60 seconds...");
+  delay(60000);
+
   // TODO: WiFiが切断された場合にリセットする
 }
