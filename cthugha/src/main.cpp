@@ -59,6 +59,11 @@ void setup() {
 
   WiFi.config(ip, gateway, subnet, dns);
 
+  temperaturePoint.addTag("device", "cthugha");
+  humidityPoint.addTag("device", "cthugha");
+}
+
+void loop() {
   /* create WiFi Connection*/
   int count = 1;
   while(!connectWiFi()) {
@@ -74,10 +79,10 @@ void setup() {
     delay(15000);
   }
 
-  temperaturePoint.addTag("device", "cthugha");
-  humidityPoint.addTag("device", "cthugha");
+  /* sync clock */
   timeSync(TZ_INFO, "ntp.nict.jp");
 
+  /* validate influxDB connection */
   if (client.validateConnection()) {
     Serial.print("Connected to influxDB: ");
     Serial.println(client.getServerUrl());
@@ -85,20 +90,18 @@ void setup() {
     Serial.print("InfluxDB connection failed: ");
     Serial.println(client.getLastErrorMessage());
   }
-}
-
-void loop() {
-  temperaturePoint.clearFields();
-  humidityPoint.clearFields();
 
   /* fetch temp and humi from DHT22 */
   // NOTE: 2秒程度待機しないとNaNになる可能性あり
+  temperaturePoint.clearFields();
+  humidityPoint.clearFields();
   temperaturePoint.addField("value", dht.getTemperature());
   humidityPoint.addField("value", dht.getHumidity());
 
   Serial.println(client.pointToLineProtocol(temperaturePoint));
   Serial.println(client.pointToLineProtocol(humidityPoint));
 
+  /* post to influxDB */
   if (!client.writePoint(temperaturePoint)) {
     Serial.print("InfluxDB write failed: ");
     Serial.println(client.getLastErrorMessage());
@@ -109,8 +112,8 @@ void loop() {
     Serial.println(client.getLastErrorMessage());
   }
 
+  WiFi.disconnect(true, true);
+
   Serial.println("Waiting 60 seconds...");
   delay(60000);
-
-  // TODO: WiFiが切断された場合にリセットする
 }
