@@ -16,6 +16,14 @@ DHTesp dht;
 const int DHT_PIN = 32;
 const DHTesp::DHT_MODEL_t DHT_TYPE = DHTesp::AM2302;
 
+hw_timer_t* timer = NULL;
+SemaphoreHandle_t syncSemaphore;
+
+void IRAM_ATTR onTimer() {
+  /* release semaphore */
+  xSemaphoreGiveFromISR(syncSemaphore, NULL);
+}
+
 boolean connectWiFi() {
   Serial.print("WiFi Connecting");
 
@@ -61,9 +69,19 @@ void setup() {
 
   temperaturePoint.addTag("device", "cthugha");
   humidityPoint.addTag("device", "cthugha");
+
+  /* initialize timer and create semaphore */
+  syncSemaphore = xSemaphoreCreateBinary();
+  timer = timerBegin(0, 80, true); // 80 clock = 1us
+  timerAttachInterrupt(timer, &onTimer, true);
+  timerAlarmWrite(timer, 1000 * 1000 * 60, true); // 1000us * 1000 * 60 = 1min
+  timerAlarmEnable(timer);
 }
 
 void loop() {
+  /* wait for semaphore (every 1min) */
+  xSemaphoreTake(syncSemaphore, portMAX_DELAY);
+
   /* create WiFi Connection*/
   int count = 1;
   while(!connectWiFi()) {
@@ -114,6 +132,5 @@ void loop() {
 
   WiFi.disconnect(true, true);
 
-  Serial.println("Waiting 60 seconds...");
-  delay(60000);
+  Serial.println("Waiting next sync..."); 
 }
